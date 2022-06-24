@@ -1,0 +1,93 @@
+331CA Stanca Adelin-Nicolae
+Tema2 APD
+
+Pentru rezolvarea temei, am folosit o abordare cu o coada sincronizata care imi
+permite sa realizez o impartire eficienta si in paralel a tuturor task-urilor
+ce trebuie rezolvate. Pentru bonus, am incercat sa folosesc o abordare tipica
+paradigmei de programare orientata-obiect (folosire de clase, mosteniri), la
+care se adauga incercarea de a da genericitate claselor mele si de a separa
+scheletul clasic al unei operatii de Map-Reduce (de exemplu clasa Worker) de
+implementarea propriu-zisa specifica temei (ReduceWorker, MapWorker).
+
+Clasa Tema2:
+Parcurg fisierul primit ca argument in linia de comanda, retin numarul de octeti
+pe care ii va avea fiecare fragment, apoi creez pe rand task-urile necesare
+fiecarei portiuni din fiecare document, calculand in prealabil corespunzator cati
+bytes va avea acel fragment. Creez workerii respectand numarul specificat, dupa
+care ma folosesc de o coada sincronizata in care am inserat in prealabil toate
+task-urile si pornesc toti workerii. La finalul acestei etape, am obtinut toate
+rezultatele partiale necesare. Pot avansa la etapa urmatoare deoarece coada este
+goala, deci nu a mai ramas niciun task de efectuat.
+Dupa obtinerea tuturor rezultatelor de la etapa de Map, parcurg task-urile
+initiale si creez noile task-uri ce se vor ocupa de etapa de Reduce, facand un
+astfel de task pentru fiecare document. Inserez, pe modelul de la Map, fiecare
+task intr-o coada sincronizata pe care o dau in constructor fiecarui worker,
+apoi pornesc workerii. La final, dupa pornirea si operatia de join, sortez
+task-urile in functie de rank-urile obtinute, dupa care le afisez in fisierul de
+iesire conform specificatiilor din enunt. Am folosit 2 implementari de workeri
+si 2 implementari de task-uri.
+
+Clasa abstracta Worker:
+Este propriu-zis scheletul pe care se va construi orice worker, inclusiv cei de
+Map si Reduce. Astfel, voi folosi un BlockingQueue al carui rol este de a avea
+initial toate task-urile ce trebuie rezolvate, dupa care fiecare worker, atunci
+cand va fi liber, va cauta sa ia un task din aceasta coada. Cand coada se termina,
+nu mai avem niciun task nerezolvat, iar workerii se opresc.
+
+Clasa MapWorker:
+Ma folosesc de coada din Worker pentru a genera task-ul. Deschid printr-un stream
+fisierul necesar, dupa care ma asigur ca fragmentul nu incepe cu o bucata de
+cuvant ce a debutat pe fragmentul anterior, caz in care parsez si nu stochez
+acele caractere. Parsez si adaug la StringBuilder caracterele din portiunea
+ceruta, dupa care verific daca portiunea se termina sau nu cu un cuvant partial,
+caz in care il parcurg pana la final si il stochez.
+Mi-am creat un Regex care ma ajuta sa separ cuvintele folosind separatorii din
+enunt, dupa care parcurg acest array de cuvinte si creez Map-ul cu toate
+lungimile si frecventa lor. Am folosit o colectie sincronizata pentru aceasta
+etapa. Apoi, calculez lungimea maxima a unui cuvant si gasesc cuvintele care
+au aceasta lungime, pastrandu-le intr-o colectie de tip synchonizedList, iar
+la final rezultatul se pastreaza intr-o instanta a unei clase de tip MapReturn.
+
+Clasa ReduceWorker:
+In metoda run, se extrage cu ajutorul cozii task-ul, se preiau datele venite
+din etapa de Map si se creeaza un Map sincronizat final care combina toate
+celelalte Map-uri din intrare. Dupa aceasta etapa, voi parcurge Map-ul de-abia
+calculat si voi afla care este lungimea maxima a unui cuvant din document,
+precum si numarul de cuvinte care duc spre aceasta lungime. In acelasi timp,
+calculez rank-ul fisierului folosindu-ma de implementarea din Lab07 a unui sir
+Fibonacci cu ajutorul unui ForkJoinPool.
+La finalul acestor calcule, obtin datele de return, dar nu inainte de a face
+split pe numele fisierului pentru a elimina calea relativa si a pastra numai
+denumirea sa.
+
+Clasa abstracta Task:
+Prezinta elementele comune ale fiecarui tip de Task dintre cele prezente, in
+acest caz doar numele fisierului cu care se va lucra.
+
+Clasa MapTask:
+Este o clasa generica folosita pentru a extinde clasa Task si pentru a acumula
+toate informatiile necesare etapei de Map. Rezultatul final al acestui task se
+va stoca in atributul out care depinde de tipul de Map pe care l-am facut, fiind
+generic.
+
+Clasa ReduceTask:
+Este o clasa generica prin care se stocheaza informatiile necesare operatiilor
+de Reduce, aceasta pastrand la final rezultatul aferent task-ului respectiv.
+
+Clasa MapReturn:
+Reprezinta modelul datelor pe care ne dorim sa le obtinem din fiecare task
+de tip Map, pentru fiecare fragment dintr-un document. Retine map-ul si lista
+calculate la etapa de Map, la care se adauga numele fisierului pentru care
+s-au facut aceste calcule. Am conceput-o generic in functie de elementele din
+map si de elementele listei.
+
+Clasa ReduceReturn:
+Stocheaza informatiile pe care trebuie sa le obtinem la finalul etapei de
+Reduce pe fiecare task asociat fiecarui document. Va retine numele fisierului,
+rank-ul acestuia (pastrat inca sub forma de double, se converteste la String
+de-abia la final), lungimea maxima a unui cuvant si numarul de cuvinte cu acea
+lungime.
+
+FibonacciCalculator:
+Implementare preluata din laborator si usor adaptata, este o implementare
+recursiva, dar care foloseste o extindere a clasei RecursiveTask<Integer>.
